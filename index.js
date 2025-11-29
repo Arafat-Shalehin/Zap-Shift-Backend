@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const app = express();
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const port = process.env.PORT || 3000;
 
@@ -35,22 +35,38 @@ async function run() {
         const query = {};
         const { email } = req.query;
 
+        console.log("Query Email:", email);
+        console.log("Query Object Before:", query);
+
         if (email) {
           query.senderEmail = email;
         }
 
-        const cursor = parcelsCollection.find(query);
-        const result = await cursor.toArray();
-        res.status(201).json({
-          success: true,
-          message: "Parcel Found successfully.",
-          data: result,
+        console.log("Final Query:", query);
+
+        const options = { sort: { createdAt: -1 } };
+
+        const result = await parcelsCollection.find(query, options).toArray();
+
+        console.log("DB Result:", result);
+
+        if (result.length > 0) {
+          return res.status(200).json({
+            success: true,
+            message: "Parcel Found successfully.",
+            data: result,
+          });
+        }
+
+        return res.status(404).json({
+          success: false,
+          message: "Parcel Not Found.",
         });
       } catch (error) {
         console.log(error);
-        res.status(500).json({
+        return res.status(500).json({
           success: false,
-          message: "Couldn't find any Parcel.",
+          message: "INTERNAL_SERVER_ERROR",
         });
       }
     });
@@ -58,6 +74,8 @@ async function run() {
     app.post("/parcels", async (req, res) => {
       try {
         const parcel = req.body;
+
+        parcel.createdAt = new Date();
 
         const result = await parcelsCollection.insertOne(parcel);
 
@@ -73,6 +91,26 @@ async function run() {
           success: false,
           message: "Unable to create parcel at the moment.",
           error: "INTERNAL_SERVER_ERROR", // high-level and safe
+        });
+      }
+    });
+
+    app.delete("/parcels/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+
+        const result = await parcelsCollection.deleteOne(query);
+        res.status(201).json({
+          message: "Product has been deleted successfully.",
+          success: true,
+          data: result,
+        });
+      } catch (error) {
+        console.log(error);
+        res.status(500).json({
+          message: "Couldn't delete the parcel. INTERNAL_SERVER_ERROR",
+          success: false,
         });
       }
     });
